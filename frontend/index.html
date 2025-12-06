@@ -1,0 +1,796 @@
+<!-- frontend/index.html -->
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>WebGIS AQI Hà Nội</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: sans-serif;
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+
+        /* Legend AQI */
+        .legend {
+            background: white;
+            padding: 8px;
+            line-height: 1.4;
+            font-size: 12px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .legend div {
+            margin-bottom: 4px;
+        }
+
+        .legend span.color-box {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        /* Popup biểu đồ lịch sử */
+        #chart-container {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            width: 360px;
+            max-height: 260px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 6px;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+            padding: 8px;
+            display: none;
+            z-index: 1000;
+        }
+
+        #chart-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin: 18px 0 6px 0;
+        }
+
+        #close-chart {
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            cursor: pointer;
+            padding: 2px 6px;
+            font-size: 12px;
+        }
+
+        #close-chart:hover {
+            background: #f0f0f0;
+        }
+
+        /* Dashboard phải */
+        #dashboard {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 360px;
+            max-height: 80vh;
+            background: rgba(255, 255, 255, 0.97);
+            border-radius: 6px;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.35);
+            padding: 8px 10px;
+            overflow-y: auto;
+            z-index: 900;
+        }
+
+        #dashboard h3 {
+            font-size: 14px;
+            margin: 4px 0 8px 0;
+        }
+
+        .dashboard-chart {
+            margin-bottom: 12px;
+        }
+
+        .chart-caption {
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        /* Panel chi tiết trạm – góc dưới bên trái */
+        #station-detail {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            width: 360px;
+            max-height: 260px;
+            background: rgba(255, 255, 255, 0.97);
+            border-radius: 12px;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+            padding: 10px 12px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 13px;
+            z-index: 1100;
+            display: none;
+            box-sizing: border-box;
+        }
+
+        /* Header: tiêu đề + nút đóng */
+        #station-detail-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        #station-detail-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        #station-detail-subtitle {
+            font-size: 11px;
+            color: #666;
+        }
+
+        #station-detail-close {
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            line-height: 16px;
+            cursor: pointer;
+            padding: 0 4px;
+            color: #555;
+        }
+
+        #station-detail-close:hover {
+            color: #000;
+        }
+
+        /* Dòng AQI nổi bật */
+        #station-detail-aqi-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        #station-detail-aqi-label {
+            font-size: 11px;
+            color: #555;
+        }
+
+        #station-detail-aqi-value {
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #eee;
+        }
+
+        /* Lưới chỉ số */
+        #station-detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-column-gap: 12px;
+            grid-row-gap: 4px;
+        }
+
+        .station-detail-label {
+            color: #666;
+            font-size: 11px;
+        }
+
+        .station-detail-value {
+            font-size: 12px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+
+    <!-- Panel chi tiết trạm -->
+    <div id="station-detail">
+        <div id="station-detail-header">
+            <div>
+                <div id="station-detail-title"></div>
+                <div id="station-detail-subtitle"></div>
+            </div>
+            <button id="station-detail-close">×</button>
+        </div>
+
+        <div id="station-detail-aqi-row">
+            <span id="station-detail-aqi-label">AQI</span>
+            <span id="station-detail-aqi-value"></span>
+        </div>
+
+        <div id="station-detail-grid"></div>
+    </div>
+
+
+    <!-- Popup biểu đồ lịch sử -->
+    <div id="chart-container">
+        <button id="close-chart">X</button>
+        <div id="chart-title"></div>
+        <canvas id="aqiChart" width="340" height="180"></canvas>
+    </div>
+
+    <!-- Dashboard phân tích -->
+    <div id="dashboard">
+        <h3>Phân tích AQI Hà Nội</h3>
+
+        <div class="dashboard-chart">
+            <div class="chart-caption">
+                AQI trung bình theo quận (lần đo mới nhất)
+            </div>
+            <canvas id="districtChart" width="340" height="180"></canvas>
+        </div>
+
+        <div class="dashboard-chart">
+            <div class="chart-caption">
+                Xu hướng AQI trung bình toàn thành phố (24 giờ gần nhất)
+            </div>
+            <canvas id="trendChart" width="340" height="180"></canvas>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="">
+        </script>
+
+    <!-- Heatmap plugin -->
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        'use strict';
+
+        /***********************
+         *  CẤU HÌNH & TIỆN ÍCH
+         ***********************/
+        const API_BASE = "http://localhost:8000/api"; // chỉnh nếu backend host khác
+
+        // Hàm trả về màu dựa trên AQI
+        function getAqiColor(aqi) {
+            if (aqi == null) return '#999999';
+            if (aqi <= 50) return '#00e400';      // Good
+            if (aqi <= 100) return '#ffff00';     // Moderate
+            if (aqi <= 150) return '#ff7e00';     // Unhealthy for SG
+            if (aqi <= 200) return '#ff0000';     // Unhealthy
+            if (aqi <= 300) return '#99004c';     // Very Unhealthy
+            return '#7e0023';                     // Hazardous
+        }
+
+        /***********************
+         *  KHỞI TẠO MAP & LAYER
+         ***********************/
+        // Map init (Tâm Hà Nội)
+        const map = L.map('map').setView([21.0285, 105.8542], 11);
+
+        // Base map (OSM)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Legend AQI
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function () {
+            const div = L.DomUtil.create('div', 'legend');
+            const grades = [
+                { max: 50, label: 'Tốt (0-50)' },
+                { max: 100, label: 'Trung bình (51-100)' },
+                { max: 150, label: 'Kém (101-150)' },
+                { max: 200, label: 'Xấu (151-200)' },
+                { max: 300, label: 'Rất xấu (201-300)' },
+                { max: 500, label: 'Nguy hại (301+)' }
+            ];
+            grades.forEach(g => {
+                const color = getAqiColor(g.max);
+                const row = document.createElement('div');
+                row.innerHTML = `<span class="color-box" style="background:${color};"></span>${g.label}`;
+                div.appendChild(row);
+            });
+            return div;
+        };
+        legend.addTo(map);
+
+        // Layer group để quản lý marker & polygon
+        const stationLayer = L.layerGroup().addTo(map);
+        const iqairLayer = L.layerGroup().addTo(map);
+
+        const districtLayer = L.geoJSON(null, {
+            style: function (feature) {
+                const aqi = feature.properties.aqi_avg;
+                return {
+                    color: '#555',
+                    weight: 1,
+                    fillColor: getAqiColor(aqi),
+                    fillOpacity: 0.3
+                };
+            },
+            onEachFeature: function (feature, layer) {
+                const aqi = feature.properties.aqi_avg;
+                layer.bindPopup(`
+          <b>${feature.properties.name}</b><br/>
+          AQI trung bình (trạm bên trong): <b>${aqi ?? 'N/A'}</b>
+        `);
+            }
+        }).addTo(map);
+
+        // Heatmap layer
+        const heatLayer = L.heatLayer([], {
+            radius: 45,
+            blur: 20,
+            maxZoom: 17,
+            max: 300
+        });
+
+        /***********************
+         *  BIẾN TOÀN CỤC CHART
+         ***********************/
+        let aqiChart = null;
+        let districtChart = null;
+        let trendChart = null;
+
+        /***********************
+         *  HÀM FETCH DỮ LIỆU MAP
+         ***********************/
+        async function fetchLatest() {
+            try {
+                const res = await fetch(`${API_BASE}/latest`);
+                const geojson = await res.json();
+
+                // Xóa marker cũ
+                stationLayer.clearLayers();
+
+                // Mảng điểm cho heatmap: [lat, lon, intensity]
+                const heatPoints = [];
+
+                L.geoJSON(geojson, {
+                    pointToLayer: function (feature, latlng) {
+                        const aqi = feature.properties.aqi;
+                        const color = getAqiColor(aqi);
+                        const marker = L.circleMarker(latlng, {
+                            radius: 10,
+                            fillColor: color,
+                            color: '#333',
+                            weight: 1,
+                            opacity: 1,
+                            fillOpacity: 0.8,
+                        });
+
+                        const name = feature.properties.name;
+                        const pm25 = feature.properties.pm25;
+                        const ts = feature.properties.ts_utc;
+
+                        marker.bindPopup(`
+  <b>${name}</b><br/>
+  AQI: <b>${aqi ?? 'N/A'}</b><br/>
+  PM2.5: ${pm25 ?? 'N/A'} µg/m³<br/>
+  Thời gian: ${ts ?? 'N/A'}<br/>
+  <button onclick="showHistory(${feature.properties.station_id}, '${name}')">
+    Xem lịch sử 24h
+  </button>
+  <button onclick="showStationDetail('waqi', ${feature.properties.station_id}, '${name}')">
+    Xem chi tiết
+  </button>
+`);
+
+                        // Thêm điểm vào heatmap nếu có AQI
+                        if (aqi != null && !isNaN(aqi)) {
+                            const intensity = Math.min(aqi / 300, 1); // chuẩn hóa 0–1
+                            heatPoints.push([latlng.lat, latlng.lng, intensity]);
+                        }
+
+                        return marker;
+                    }
+                }).addTo(stationLayer);
+
+                // Cập nhật heatmap
+                heatLayer.setLatLngs(heatPoints);
+            } catch (err) {
+                console.error('Lỗi fetchLatest:', err);
+            }
+        }
+
+        function updateDistrictLayer(gj) {
+            districtLayer.clearLayers();
+            districtLayer.addData(gj);
+        }
+
+        // fetch district một lần rồi dùng cho cả layer & chart
+        async function loadDistrictData() {
+            try {
+                const res = await fetch(`${API_BASE}/district_aqi`);
+                const gj = await res.json();
+                updateDistrictLayer(gj);
+                updateDistrictChart(gj);
+            } catch (err) {
+                console.error('Lỗi loadDistrictData:', err);
+            }
+        }
+
+        async function fetchIqairPoints() {
+            try {
+                const res = await fetch(`${API_BASE}/iqair_points`);
+                const geojson = await res.json();
+
+                iqairLayer.clearLayers();
+
+                L.geoJSON(geojson, {
+                    pointToLayer: (feature, latlng) => {
+                        const aqi = feature.properties.aqi_us;
+                        const color = getAqiColor(aqi);
+                        const marker = L.circleMarker(latlng, {
+                            radius: 9,
+                            fillColor: color,
+                            color: '#000',     // viền đen cho khác WAQI
+                            weight: 1,
+                            fillOpacity: 0.9,
+                        });
+
+                        const name = feature.properties.display_name;
+                        const ts = feature.properties.ts;
+
+                        marker.bindPopup(`
+  <b>${name}</b><br/>
+  AQI (IQAir-US): <b>${aqi ?? 'N/A'}</b><br/>
+  Thời gian: ${ts ?? 'N/A'}<br/>
+  <button onclick="showStationDetail('iqair', ${feature.properties.station_id}, '${name}')">
+    Xem chi tiết
+  </button>
+`);
+                        return marker;
+                    }
+                }).addTo(iqairLayer);
+            } catch (err) {
+                console.error('Lỗi fetchIqairPoints:', err);
+            }
+        }
+
+        /***********************
+         *  HÀM BIỂU ĐỒ DASHBOARD
+         ***********************/
+        function updateDistrictChart(gj) {
+            const labels = [];
+            const data = [];
+
+            gj.features.forEach(f => {
+                const aqi = f.properties.aqi_avg;
+                if (aqi != null) {
+                    labels.push(f.properties.name);
+                    data.push(aqi);
+                }
+            });
+
+            const ctx = document.getElementById('districtChart').getContext('2d');
+
+            if (districtChart) {
+                districtChart.destroy();
+            }
+
+            districtChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'AQI trung bình',
+                        data,
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: false,
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        async function updateTrendChart() {
+            try {
+                const res = await fetch(`${API_BASE}/city_trend?hours=24`);
+                const data = await res.json();
+
+                if (!Array.isArray(data) || data.length === 0) return;
+
+                const labels = data.map(d => new Date(d.hour));
+                const aqi = data.map(d => d.aqi_avg);
+
+                const ctx = document.getElementById('trendChart').getContext('2d');
+
+                if (trendChart) {
+                    trendChart.destroy();
+                }
+
+                trendChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels.map(l =>
+                            l.toLocaleTimeString('vi-VN', { hour: '2-digit' })
+                        ),
+                        datasets: [
+                            {
+                                label: 'AQI trung bình',
+                                data: aqi,
+                                tension: 0.3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: false,
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                position: 'left',
+                                beginAtZero: true
+                            }
+                        },
+                        plugins: {
+                            legend: { display: true }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('Lỗi updateTrendChart:', err);
+            }
+        }
+
+
+        /***********************
+         *  BIỂU ĐỒ LỊCH SỬ TRẠM
+         ***********************/
+        async function showHistory(stationId, stationName) {
+            try {
+                const res = await fetch(`${API_BASE}/history?station_id=${stationId}&hours=24`);
+                const data = await res.json();
+                if (!Array.isArray(data) || data.length === 0) {
+                    alert("Không có dữ liệu lịch sử cho trạm này.");
+                    return;
+                }
+
+                const labels = data.map(d => new Date(d.ts_utc));
+                const aqi = data.map(d => d.aqi);
+                const pm25 = data.map(d => d.pm25);
+
+                const container = document.getElementById('chart-container');
+                container.style.display = 'block';
+                document.getElementById('chart-title').innerText =
+                    `Lịch sử AQI / PM2.5 (24h) - ${stationName}`;
+
+                const ctx = document.getElementById('aqiChart').getContext('2d');
+
+                if (aqiChart) {
+                    aqiChart.destroy();
+                }
+
+                aqiChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels.map(l =>
+                            l.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                        ),
+                        datasets: [
+                            {
+                                label: 'AQI',
+                                data: aqi,
+                                yAxisID: 'y1',
+                            },
+                            {
+                                label: 'PM2.5 (µg/m³)',
+                                data: pm25,
+                                yAxisID: 'y2',
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: false,
+                        scales: {
+                            y1: {
+                                type: 'linear',
+                                position: 'left',
+                            },
+                            y2: {
+                                type: 'linear',
+                                position: 'right',
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: true
+                            }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('Lỗi showHistory:', err);
+                alert("Không lấy được dữ liệu lịch sử.");
+            }
+        }
+
+        /***********************
+ *  PANEL CHI TIẾT TRẠM
+ ***********************/
+        async function showStationDetail(source, stationId, stationName) {
+            try {
+                const res = await fetch(
+                    `${API_BASE}/station_detail?source=${encodeURIComponent(source)}&station_id=${stationId}`
+                );
+                if (!res.ok) {
+                    throw new Error("HTTP " + res.status);
+                }
+                const d = await res.json();
+
+                const panel = document.getElementById("station-detail");
+                const titleEl = document.getElementById("station-detail-title");
+                const subtitleEl = document.getElementById("station-detail-subtitle");
+                const aqiLabelEl = document.getElementById("station-detail-aqi-label");
+                const aqiValueEl = document.getElementById("station-detail-aqi-value");
+                const gridEl = document.getElementById("station-detail-grid");
+                const aqiRowEl = document.getElementById("station-detail-aqi-row");
+
+
+                // Tiêu đề
+                titleEl.textContent = `Thông tin chi tiết trạm - ${stationName}`;
+
+                // Thời gian
+                let ts = source === "waqi" ? d.ts_utc : d.ts_local;
+                if (ts) {
+                    const dt = new Date(ts);
+                    subtitleEl.textContent = `Thời gian: ${dt.toLocaleString("vi-VN")}`;
+                } else {
+                    subtitleEl.textContent = "";
+                }
+
+                // AQI + màu nền
+                let aqiVal = source === "waqi" ? d.aqi : d.aqi_us;
+                if (aqiVal != null) {
+                    const color = getAqiColor(aqiVal);
+                    aqiLabelEl.textContent = source === "waqi" ? "AQI (WAQI)" : "AQI (US)";
+                    aqiValueEl.textContent = aqiVal;
+                    aqiValueEl.style.backgroundColor = color;
+                    aqiValueEl.style.color = "#000";
+                    aqiLabelEl.style.display = "inline";
+                    aqiValueEl.style.display = "inline-block";
+                    aqiRowEl.style.display = "flex";
+                } else {
+                    aqiRowEl.style.display = "none";
+                }
+
+                // Helper: thêm field nếu có dữ liệu (null / undefined thì bỏ qua)
+                const rows = [];
+                function addField(label, value, unit) {
+                    if (value == null) return; // 0 vẫn hiển thị
+                    const unitText = unit ? ` ${unit}` : "";
+                    rows.push(
+                        `<div class="station-detail-label">${label}</div>` +
+                        `<div class="station-detail-value">${value}${unitText}</div>`
+                    );
+                }
+
+                // Các chỉ số cho từng nguồn
+                if (source === "waqi") {
+                    addField("PM2.5", d.pm25, "µg/m³");
+                    addField("PM10", d.pm10, "µg/m³");
+                    addField("O₃", d.o3, "µg/m³");
+                    addField("NO₂", d.no2, "µg/m³");
+                    addField("SO₂", d.so2, "µg/m³");
+                    addField("CO", d.co, "µg/m³");
+                    addField("Nhiệt độ", d.temperature, "°C");
+                    addField("Độ ẩm", d.humidity, "%");
+                    addField("Áp suất", d.pressure, "hPa");
+                    addField("Gió", d.wind, "m/s");
+                    addField("Điểm sương", d.dew_point, "°C");
+                } else {
+                    // iqair
+                    addField("PM2.5", d.pm25, "µg/m³");
+                    addField("PM10", d.pm10, "µg/m³");
+                    addField("Nhiệt độ", d.temp, "°C");
+                    addField("Độ ẩm", d.humidity, "%");
+                    addField("Áp suất", d.pressure, "hPa");
+                    addField("Gió", d.wind_speed, "m/s");
+                    addField("Hướng gió", d.wind_dir, "°");
+                    addField("AQI (CN)", d.aqi_cn, "");
+                    addField("Chỉ số nhiệt", d.heat_index, "°C");
+                }
+
+                gridEl.innerHTML = rows.join("");
+
+                // Hiển thị panel
+                panel.style.display = "block";
+            } catch (err) {
+                console.error("Lỗi showStationDetail:", err);
+                alert("Không lấy được thông tin chi tiết trạm.");
+            }
+        }
+
+        // Cho popup Leaflet gọi được
+        window.showStationDetail = showStationDetail;
+
+        // Nút đóng panel
+        document.getElementById("station-detail-close").onclick = function () {
+            document.getElementById("station-detail").style.display = "none";
+        };
+
+        // Cho popup Leaflet gọi được
+        window.showStationDetail = showStationDetail;
+
+        // Nút đóng panel chi tiết
+        document.getElementById('station-detail-close').onclick = function () {
+            document.getElementById('station-detail').style.display = 'none';
+        };
+
+
+
+        // Cho phép popup gọi được hàm showHistory
+        window.showHistory = showHistory;
+
+        // Xử lý nút đóng popup lịch sử
+        document.getElementById('close-chart').onclick = function () {
+            const container = document.getElementById('chart-container');
+            container.style.display = 'none';
+
+            if (aqiChart) {
+                aqiChart.destroy();
+                aqiChart = null;
+            }
+        };
+
+        /***********************
+         *  CONTROL LAYERS & INIT
+         ***********************/
+        const overlays = {
+            "Trạm AQI": stationLayer,
+            "Trạm IQAir": iqairLayer,
+            "AQI theo quận": districtLayer,
+            "Heatmap AQI": heatLayer
+        };
+
+        L.control.layers(null, overlays, {
+            collapsed: false,
+            position: 'topleft'   // chuyển sang góc trái
+        }).addTo(map);
+
+        // Lần đầu load
+        fetchLatest();
+        fetchIqairPoints();
+        loadDistrictData();
+        updateTrendChart();
+        map.addLayer(heatLayer);
+
+        // Auto refresh mỗi 600s
+        setInterval(() => {
+            fetchLatest();
+            loadDistrictData();
+            updateTrendChart();
+        }, 600000);
+    </script>
+</body>
+
+</html>
